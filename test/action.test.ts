@@ -26,6 +26,14 @@ describe("public action contract", () => {
     expect(metadata).toContain("main: dist/index.js");
   });
 
+  test("pins third-party actions in CI", async () => {
+    const workflow = await readFile(
+      join(process.cwd(), ".github/workflows/ci.yml"),
+      "utf8",
+    );
+    expect(workflow).not.toMatch(/uses: [^\s]+@v\d/u);
+  });
+
   test("applies conservative defaults from the GitHub runtime", () => {
     expect(
       parseActionConfig(
