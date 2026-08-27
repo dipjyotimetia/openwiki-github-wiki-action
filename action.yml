@@ -1,0 +1,49 @@
+name: Publish OpenWiki to GitHub Wiki
+description: Publish a reviewed OpenWiki directory as a generated GitHub Wiki.
+author: Dipjyoti Metia
+
+branding:
+  icon: book-open
+  color: blue
+
+inputs:
+  token:
+    description: Short-lived token with write access to the target GitHub Wiki.
+    required: true
+  source:
+    description: Repository-relative OpenWiki source directory.
+    required: false
+    default: openwiki
+  repository:
+    description: Target repository in owner/name form.
+    required: false
+  source-ref:
+    description: Source commit or ref used for immutable repository links.
+    required: false
+  home-page:
+    description: Markdown file below source to publish as Home.md.
+    required: false
+    default: quickstart.md
+  commit-message:
+    description: Git commit message for a changed Wiki publication.
+    required: false
+  committer-name:
+    description: Git author name for Wiki commits.
+    required: false
+    default: github-actions[bot]
+  committer-email:
+    description: Git author email for Wiki commits.
+    required: false
+    default: 41898282+github-actions[bot]@users.noreply.github.com
+
+outputs:
+  changed:
+    description: Whether publication created a Wiki commit.
+  commit-sha:
+    description: Published Wiki commit SHA, or empty when nothing changed.
+  wiki-url:
+    description: Browser URL for the target GitHub Wiki.
+
+runs:
+  using: node24
+  main: dist/index.js
