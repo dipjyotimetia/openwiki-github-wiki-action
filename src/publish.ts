@@ -50,14 +50,16 @@ export async function publishWiki(
 
     await runGit(["add", "-A"], cloneDir, auth);
     await options.beforePush?.(cloneDir);
-    await assertRemoteUnchanged(cloneDir, branch.stdout, auth);
     const diff = await runGit(
       ["diff", "--cached", "--quiet"],
       cloneDir,
       auth,
       [0, 1],
     );
-    if (diff.code === 0) return { changed: false, commitSha: "" };
+    if (diff.code === 0) {
+      await pushSafely(cloneDir, branch.stdout, auth);
+      return { changed: false, commitSha: "" };
+    }
 
     await runGit(
       ["config", "user.name", options.committerName],
@@ -75,38 +77,27 @@ export async function publishWiki(
       auth,
     );
     const commit = await runGit(["rev-parse", "HEAD"], cloneDir, auth);
-    try {
-      await runGit(
-        ["push", "--quiet", "origin", `HEAD:${branch.stdout}`],
-        cloneDir,
-        auth,
-      );
-    } catch (error) {
-      throw new Error(
-        `Unable to publish the GitHub Wiki without rewriting history. Rerun after resolving concurrent Wiki changes. ${errorMessage(error)}`,
-      );
-    }
+    await pushSafely(cloneDir, branch.stdout, auth);
     return { changed: true, commitSha: commit.stdout };
   } finally {
     await rm(worktree, { recursive: true, force: true });
   }
 }
 
-async function assertRemoteUnchanged(
+async function pushSafely(
   cloneDir: string,
   branch: string,
   auth: NodeJS.ProcessEnv,
 ): Promise<void> {
-  const local = await runGit(["rev-parse", "HEAD"], cloneDir, auth);
-  const remote = await runGit(
-    ["ls-remote", "--heads", "origin", `refs/heads/${branch}`],
-    cloneDir,
-    auth,
-  );
-  const remoteSha = remote.stdout.split(/\s+/u)[0];
-  if (remoteSha !== local.stdout) {
+  try {
+    await runGit(
+      ["push", "--quiet", "origin", `HEAD:${branch}`],
+      cloneDir,
+      auth,
+    );
+  } catch (error) {
     throw new Error(
-      "Unable to publish the GitHub Wiki without rewriting history. The Wiki changed after checkout; rerun publication.",
+      `Unable to publish the GitHub Wiki without rewriting history. Rerun after resolving concurrent Wiki changes. ${errorMessage(error)}`,
     );
   }
 }

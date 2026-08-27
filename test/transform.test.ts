@@ -16,6 +16,7 @@ async function fixture(): Promise<{
   await mkdir(join(source, "architecture"), { recursive: true });
   await mkdir(join(root, "docs"), { recursive: true });
   await writeFile(join(root, "docs", "security.md"), "# Security\n");
+  await writeFile(join(root, "docs", "diagram.png"), "png fixture\n");
   return { root, source, output };
 }
 
@@ -34,7 +35,10 @@ describe("buildWiki", () => {
         "",
         "See [architecture](architecture/), [overview][overview], and [security](../docs/security.md).",
         "",
+        "![Diagram][diagram]",
+        "",
         "[overview]: architecture/overview.md",
+        "[diagram]: ../docs/diagram.png",
       ].join("\n"),
     );
     await writeFile(
@@ -71,7 +75,11 @@ describe("buildWiki", () => {
         "",
         "See [architecture](https://github.com/owner/project/wiki/Architecture), [overview][overview], and [security](https://github.com/owner/project/blob/abc123/docs/security.md).",
         "",
+        "![Diagram][diagram]",
+        "",
         "[overview]: https://github.com/owner/project/wiki/Architecture-Overview",
+        "",
+        "[diagram]: https://github.com/owner/project/raw/abc123/docs/diagram.png",
         "",
       ].join("\n"),
     );

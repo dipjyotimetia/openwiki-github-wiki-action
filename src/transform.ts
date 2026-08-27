@@ -19,7 +19,14 @@ import {
 } from "node:path";
 
 import { toString } from "mdast-util-to-string";
-import type { Definition, Heading, Image, Link, Root } from "mdast";
+import type {
+  Definition,
+  Heading,
+  Image,
+  ImageReference,
+  Link,
+  Root,
+} from "mdast";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
@@ -141,6 +148,10 @@ function rewriteLinks(
   sourceFile: string,
   context: RewriteContext,
 ): void {
+  const imageDefinitions = new Set<string>();
+  visit(tree, "imageReference", (node: ImageReference) => {
+    imageDefinitions.add(node.identifier.toLocaleLowerCase("en-US"));
+  });
   visit(tree, "link", (node: Link) => {
     node.url = rewriteUrl(node.url, sourceFile, context, false);
   });
@@ -148,7 +159,12 @@ function rewriteLinks(
     node.url = rewriteUrl(node.url, sourceFile, context, true);
   });
   visit(tree, "definition", (node: Definition) => {
-    node.url = rewriteUrl(node.url, sourceFile, context, false);
+    node.url = rewriteUrl(
+      node.url,
+      sourceFile,
+      context,
+      imageDefinitions.has(node.identifier.toLocaleLowerCase("en-US")),
+    );
   });
 }
 
