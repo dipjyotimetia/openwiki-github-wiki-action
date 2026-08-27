@@ -27,7 +27,7 @@ export async function publishWiki(
     join(options.temporaryDirectory, "openwiki-wiki-"),
   );
   const cloneDir = join(worktree, "repository");
-  const auth = gitAuthEnvironment(options.wikiGitUrl, options.token);
+  const auth = createGitAuthEnvironment(options.wikiGitUrl, options.token);
 
   try {
     await runGit(
@@ -49,6 +49,8 @@ export async function publishWiki(
     await cp(contentDir, cloneDir, { recursive: true });
 
     await runGit(["add", "-A"], cloneDir, auth);
+    await options.beforePush?.(cloneDir);
+    await assertRemoteUnchanged(cloneDir, branch.stdout, auth);
     const diff = await runGit(
       ["diff", "--cached", "--quiet"],
       cloneDir,
@@ -73,7 +75,6 @@ export async function publishWiki(
       auth,
     );
     const commit = await runGit(["rev-parse", "HEAD"], cloneDir, auth);
-    await options.beforePush?.(cloneDir);
     try {
       await runGit(
         ["push", "--quiet", "origin", `HEAD:${branch.stdout}`],
@@ -88,6 +89,25 @@ export async function publishWiki(
     return { changed: true, commitSha: commit.stdout };
   } finally {
     await rm(worktree, { recursive: true, force: true });
+  }
+}
+
+async function assertRemoteUnchanged(
+  cloneDir: string,
+  branch: string,
+  auth: NodeJS.ProcessEnv,
+): Promise<void> {
+  const local = await runGit(["rev-parse", "HEAD"], cloneDir, auth);
+  const remote = await runGit(
+    ["ls-remote", "--heads", "origin", `refs/heads/${branch}`],
+    cloneDir,
+    auth,
+  );
+  const remoteSha = remote.stdout.split(/\s+/u)[0];
+  if (remoteSha !== local.stdout) {
+    throw new Error(
+      "Unable to publish the GitHub Wiki without rewriting history. The Wiki changed after checkout; rerun publication.",
+    );
   }
 }
 
@@ -134,7 +154,7 @@ async function runGit(
   return result;
 }
 
-function gitAuthEnvironment(
+export function createGitAuthEnvironment(
   wikiGitUrl: string,
   token: string,
 ): NodeJS.ProcessEnv {

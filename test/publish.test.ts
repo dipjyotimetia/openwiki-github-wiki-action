@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { publishWiki } from "../src/publish.js";
+import { createGitAuthEnvironment, publishWiki } from "../src/publish.js";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -67,23 +67,13 @@ describe("publishWiki", () => {
     ).rejects.toThrow();
   });
 
-  test("does not include the token in a failed clone error", async () => {
-    const root = await mkdtemp(join(tmpdir(), "openwiki-publish-fail-"));
-    const contentDir = join(root, "content");
-    await mkdir(contentDir);
-    await writeFile(join(contentDir, "Home.md"), "# Home\n");
+  test("passes HTTPS credentials through Git config instead of the remote URL", () => {
+    const remote = "https://github.com/owner/project.wiki.git";
+    const auth = createGitAuthEnvironment(remote, "super-secret-token");
 
-    await expect(
-      publishWiki({
-        wikiGitUrl: join(root, "missing.git"),
-        contentDir,
-        token: "super-secret-token",
-        commitMessage: "docs: sync OpenWiki",
-        committerName: "OpenWiki Publisher",
-        committerEmail: "publisher@example.com",
-        temporaryDirectory: root,
-      }),
-    ).rejects.not.toThrow(/super-secret-token/u);
+    expect(remote).not.toContain("super-secret-token");
+    expect(auth.GIT_CONFIG_KEY_0).toBe("http.extraheader");
+    expect(auth.GIT_CONFIG_VALUE_0).not.toContain("super-secret-token");
   });
 
   test("fails instead of force-pushing over a concurrent Wiki update", async () => {
@@ -119,5 +109,35 @@ describe("publishWiki", () => {
     expect(await readFile(join(verify, "Concurrent.md"), "utf8")).toBe(
       "# Concurrent\n",
     );
+  });
+
+  test("rejects a concurrent update when generated content was initially unchanged", async () => {
+    const { root, remote } = await wikiRemote();
+    const contentDir = join(root, "content");
+    await mkdir(contentDir);
+    await writeFile(join(contentDir, "Home.md"), "# Bootstrap\n");
+    await writeFile(join(contentDir, "Manual.md"), "# Remove me\n");
+
+    await expect(
+      publishWiki({
+        wikiGitUrl: remote,
+        contentDir,
+        token: "masked-token",
+        commitMessage: "docs: sync OpenWiki",
+        committerName: "OpenWiki Publisher",
+        committerEmail: "publisher@example.com",
+        temporaryDirectory: root,
+        beforePush: async () => {
+          const rival = join(root, "noop-rival");
+          git(root, "clone", remote, rival);
+          git(rival, "config", "user.name", "Rival");
+          git(rival, "config", "user.email", "rival@example.com");
+          await writeFile(join(rival, "Concurrent.md"), "# Concurrent\n");
+          git(rival, "add", ".");
+          git(rival, "commit", "-m", "concurrent update");
+          git(rival, "push", "origin", "main");
+        },
+      }),
+    ).rejects.toThrow(/without rewriting history/u);
   });
 });

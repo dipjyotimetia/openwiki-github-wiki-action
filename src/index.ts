@@ -8,7 +8,12 @@ import { buildWiki } from "./transform.js";
 
 export async function run(): Promise<void> {
   const token = core.getInput("token");
-  if (token) core.setSecret(token);
+  if (token) {
+    core.setSecret(token);
+    core.setSecret(
+      Buffer.from(`x-access-token:${token}`, "utf8").toString("base64"),
+    );
+  }
 
   const config = parseActionConfig(
     {

@@ -32,7 +32,9 @@ describe("buildWiki", () => {
         "",
         "# Project Quickstart",
         "",
-        "See [architecture](architecture/) and [security](../docs/security.md).",
+        "See [architecture](architecture/), [overview][overview], and [security](../docs/security.md).",
+        "",
+        "[overview]: architecture/overview.md",
       ].join("\n"),
     );
     await writeFile(
@@ -67,7 +69,9 @@ describe("buildWiki", () => {
       [
         "# Project Quickstart",
         "",
-        "See [architecture](https://github.com/owner/project/wiki/Architecture) and [security](https://github.com/owner/project/blob/abc123/docs/security.md).",
+        "See [architecture](https://github.com/owner/project/wiki/Architecture), [overview][overview], and [security](https://github.com/owner/project/blob/abc123/docs/security.md).",
+        "",
+        "[overview]: https://github.com/owner/project/wiki/Architecture-Overview",
         "",
       ].join("\n"),
     );
@@ -99,5 +103,22 @@ describe("buildWiki", () => {
         homePage: "quickstart.md",
       }),
     ).rejects.toThrow(/collision/i);
+  });
+
+  test("rejects an output directory that is the source directory", async () => {
+    const { root, source } = await fixture();
+    await writeFile(join(source, "quickstart.md"), "# Home\n");
+
+    await expect(
+      buildWiki({
+        sourceDir: source,
+        outputDir: source,
+        workspaceDir: root,
+        repository: "owner/project",
+        sourceRef: "abc123",
+        serverUrl: "https://github.com",
+        homePage: "quickstart.md",
+      }),
+    ).rejects.toThrow(/output directory must not be inside/u);
   });
 });

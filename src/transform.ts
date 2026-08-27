@@ -8,6 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import {
+  basename,
   dirname,
   extname,
   isAbsolute,
@@ -18,7 +19,7 @@ import {
 } from "node:path";
 
 import { toString } from "mdast-util-to-string";
-import type { Heading, Image, Link, Root } from "mdast";
+import type { Definition, Heading, Image, Link, Root } from "mdast";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
@@ -83,8 +84,12 @@ export async function buildWiki(
     targetBySource.set(sourcePath, targetFile);
   }
 
-  const outputDir = resolve(options.outputDir);
-  if (isInside(sourceDir, outputDir)) {
+  const requestedOutput = resolve(options.outputDir);
+  const outputDir = join(
+    await realpath(dirname(requestedOutput)),
+    basename(requestedOutput),
+  );
+  if (isWithin(sourceDir, outputDir)) {
     throw new Error(
       "The output directory must not be inside the OpenWiki source directory",
     );
@@ -142,6 +147,9 @@ function rewriteLinks(
   visit(tree, "image", (node: Image) => {
     node.url = rewriteUrl(node.url, sourceFile, context, true);
   });
+  visit(tree, "definition", (node: Definition) => {
+    node.url = rewriteUrl(node.url, sourceFile, context, false);
+  });
 }
 
 function rewriteUrl(
@@ -169,7 +177,7 @@ function rewriteUrl(
     throw new Error(`Broken local link in ${sourceFile}: ${url}`);
   }
 
-  if (isInside(context.sourceDir, absoluteTarget)) {
+  if (isWithin(context.sourceDir, absoluteTarget)) {
     const resolvedTarget = targetStat.isDirectory()
       ? join(absoluteTarget, "index.md")
       : absoluteTarget;
@@ -312,9 +320,13 @@ function hasScheme(value: string): boolean {
 }
 
 function assertInside(parent: string, candidate: string, label: string): void {
-  if (!isInside(parent, candidate) && resolve(parent) !== resolve(candidate)) {
+  if (!isWithin(parent, candidate)) {
     throw new Error(`${label} resolves outside the repository workspace`);
   }
+}
+
+function isWithin(parent: string, candidate: string): boolean {
+  return resolve(parent) === resolve(candidate) || isInside(parent, candidate);
 }
 
 function isInside(parent: string, candidate: string): boolean {
